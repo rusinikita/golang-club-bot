@@ -8,6 +8,7 @@ require (
 	github.com/joho/godotenv v1.4.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/stretchr/testify v1.7.0
+	gopkg.in/telebot.v3 v3.0.0
 )
 
 require (

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"math/rand"
+	"strconv"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 func Test(t *testing.T) {
 	ctx := context.Background()
 
-	userID := rand.New(rand.NewSource(time.Now().UnixNano())).Int31()
+	userID := strconv.Itoa(rand.New(rand.NewSource(time.Now().UnixNano())).Int())
 
 	err := godotenv.Load("../.env")
 	if err != nil {
