@@ -44,7 +44,6 @@ func main() {
 	b.Handle(&goButton, func(c bot.Context) error {
 		return simplectx.Wrap(c, func(c bot.Context, sc *simplectx.Context) {
 			interval := 2 * time.Second
-			time.Sleep(interval)
 			sc.Send(step1, bot.NoPreview)
 
 			time.Sleep(interval)
