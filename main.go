@@ -31,13 +31,25 @@ func main() {
 
 	b.Handle("/start", func(c bot.Context) error {
 		return simplectx.Wrap(c, func(c bot.Context, sc *simplectx.Context) {
-			sc.Send(hello)
-			sc.Error(db.Create(context.Background(), request.New(c.Sender())))
+			ctx := context.Background()
 
+			sc.Send(hello)
 			sc.Send(fmt.Sprintf(hiText, cfg.AnnounceLink), &bot.SendOptions{
 				DisableWebPagePreview: true,
 				ReplyMarkup:           btns,
 			})
+
+			var users []request.Request
+			err := db.List(ctx, &users, airtable.Filter(request.NewID(c.Sender())))
+			if err != nil {
+				log.Println(err)
+			}
+
+			if len(users) > 0 {
+				return
+			}
+
+			sc.Error(db.Create(ctx, request.New(c.Sender())))
 		})
 	})
 
