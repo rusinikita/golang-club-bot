@@ -13,7 +13,22 @@ type Request struct {
 	Name           string
 	Username       string
 	RepositoryLink string `json:",omitempty"`
+	Status         Status
+	DeclineMessage string
+	Send           bool // is notification send
 }
+
+func (r Request) Recipient() string {
+	return r.UserID
+}
+
+type Status string
+
+const (
+	None     Status = ""
+	Accepted Status = "Accepted"
+	Declined Status = "Declined"
+)
 
 func NewID(u *bot.User) Request {
 	return Request{UserID: strconv.FormatInt(u.ID, 10)}

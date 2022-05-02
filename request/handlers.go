@@ -16,6 +16,8 @@ import (
 type config struct {
 	AnnounceLink string `env:"ANNOUNCE_LINK,notEmpty"`
 	QnALink      string `env:"QNA_LINK,notEmpty"`
+	AdminID      int64  `env:"ADMIN_ID,required"`
+	GroupChatID  int64  `env:"GROUP_CHAT_ID,required"`
 }
 
 func Setup(db airtable.Airtable, b *bot.Bot) {
@@ -119,45 +121,64 @@ func Setup(db airtable.Airtable, b *bot.Bot) {
 			sc.Send(doneText)
 		})
 	})
+
+	b.Handle("/notify", func(c bot.Context) error {
+		return simplectx.Wrap(c, func(c bot.Context, sc *simplectx.Context) {
+			if c.Sender().ID != cfg.AdminID {
+				sc.Reply("permission denied")
+
+				return
+			}
+
+			var requests []Request
+			filter := airtable.Filter(Request{
+				Send: false,
+			})
+			ctx := context.Background()
+			sc.Error(db.List(ctx, &requests, filter))
+
+			acceptedCount := 0
+			for _, r := range requests {
+				if r.Status == Accepted {
+					acceptedCount++
+				}
+			}
+
+			for _, r := range requests {
+				switch r.Status {
+				case None:
+					sc.SendTo(r, sad)
+					sc.SendTo(r, fmt.Sprintf(remind, acceptedCount), goButton)
+
+				case Declined:
+					sc.SendTo(r, sorry)
+					sc.SendTo(r, decline)
+					sc.SendTo(r, r.DeclineMessage)
+
+				case Accepted:
+					link, err := c.Bot().CreateInviteLink(bot.ChatID(cfg.GroupChatID), &bot.ChatInviteLink{
+						Name:        r.Name + " link",
+						MemberLimit: 1,
+					})
+					sc.Error(err)
+
+					btns := &bot.ReplyMarkup{}
+					btn := btns.URL("Согласен, let's go", link.InviteLink)
+					btns.Inline(btns.Row(btn))
+
+					sc.SendTo(r, welcome)
+					sc.SendTo(r, accept, btns)
+				}
+
+				sc.Error(db.Patch(ctx, Request{
+					RecordID: r.RecordID,
+					Send:     true,
+				}))
+
+				fmt.Println("done", r.UserID, r.Name)
+
+				time.Sleep(500 * time.Millisecond)
+			}
+		})
+	})
 }
-
-const (
-	hello    simplectx.Sticker = "CAACAgQAAxkBAAOpYmmXKS3ykycZk2qrR97R2_jTLKwAAswAA845CA3fZ3xlfkS5ZCQE"   // 🙃
-	wtf      simplectx.Sticker = "CAACAgQAAxkBAAOrYmmXgeYtrZiN2IuUckR854EheykAApkAA845CA0jIAABUzXpH78kBA" // 🤨
-	wellDone simplectx.Sticker = "CAACAgQAAxkBAAOtYmmX5-cveqGjl44BirOjkuy1cz4AApcAA845CA1AIS58gGBWGiQE"   // 👍
-)
-
-const (
-	hiText = `Привет!
-
-Если ты хочешь поучаствовать <a href="%s">в клубе изучения Go</a>, то ты по адресу.
-
-Пройди простое задание, чтобы доказать мотивацию, и сможешь учиться GoLang с теми, кто поможет справиться с трудностями и подскажет что делать после.`
-	step1 = `1. Создай профиль на github.com
-
-Заполни настоящее имя, фото и город. Напиши в bio текущее место учебы/работы (направление и курс тоже)`
-	step2 = `2. <a href="https://drive.google.com/file/d/1-8AQtU5WuftQrUioXYkp0bY2K20t9vM3/view?usp=sharing">Создай репозиторий</a>
-
-Название kgl-go-learing (с дополнениями если занято)
-README файл (нужно поставить галочку)
-
-Этот репозиторий станет твоим портфолио, тетрадкой с заданиями и поможет систематизировать знания`
-	step3 = `3. Напиши в README файле
-
-1. О себе
-2. Цель изучения. Почему ты хочешь научиться go или программированию ("почему бы и нет" - валидный ответ, но нужно подробнее расписать)
-3. Почему уверен, что не бросишь занятия и не потратишь время менторов впустую
-4. Ожидания. Как скоро и что ты хочешь получить от участия.
-5. Перечисли вопросы, которые хотел бы обсудить.
-
-Используй # для создания заголовков`
-	step4 = `4. Просто отправь мне ссылку на получившийся репозиторий в сообщении.
-
-Например, https://github.com/rusinikita/mindful-bot`
-	step5      = `5. Дождись конца проверки и ответа`
-	step6      = `Это всё, жду ссылку. Если какие-то проблемы, предложения, что-то не нравится - напиши <a href="%s">в этом чате</a>`
-	noLinkText = `Ты не прислал ссылку. Если хочешь обсудить что-то - напиши <a href="%s">в этом чате</a>`
-	doneText   = `Супер. Как только проверят задание, я отправлю тебе результат.
-
-Если хочешь поменять ссылку, отправь новую.`
-)

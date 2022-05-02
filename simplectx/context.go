@@ -36,6 +36,11 @@ func (c *Context) Send(what interface{}, opts ...interface{}) {
 	c.Error(c.c.Send(what, opts...))
 }
 
+func (c *Context) SendTo(to bot.Recipient, what interface{}, opts ...interface{}) {
+	_, err := c.c.Bot().Send(to, what, opts...)
+	c.Error(err)
+}
+
 func (c *Context) SendAlbum(a bot.Album, opts ...interface{}) {
 	c.Error(c.c.SendAlbum(a, opts...))
 }
