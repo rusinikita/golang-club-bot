@@ -16,6 +16,10 @@ type Options struct {
 	Filter any    // entity obj with not zero values filter fields
 }
 
+func View(view string) Options {
+	return Options{View: view}
+}
+
 func Filter(entity any) Options {
 	return Options{Filter: entity}
 }

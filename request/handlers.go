@@ -14,21 +14,28 @@ import (
 )
 
 type config struct {
-	AnnounceLink string `env:"ANNOUNCE_LINK,notEmpty"`
-	QnALink      string `env:"QNA_LINK,notEmpty"`
-	AdminID      int64  `env:"ADMIN_ID,required"`
-	GroupChatID  int64  `env:"GROUP_CHAT_ID,required"`
+	AnnounceLink     string `env:"ANNOUNCE_LINK,notEmpty"`
+	QnALink          string `env:"QNA_LINK,notEmpty"`
+	AdminID          int64  `env:"ADMIN_ID,required"`
+	GroupChatID      int64  `env:"GROUP_CHAT_ID,required"`
+	SendNotification bool   `env:"SEND_NOTIFICATION"`
 }
 
-func Setup(db airtable.Airtable, b *bot.Bot) {
+func newConfig() config {
 	cfg := config{}
 	if err := env.Parse(&cfg); err != nil {
 		log.Fatalf("%+v", err)
 	}
 
-	btns := &bot.ReplyMarkup{}
-	goButton := btns.Data("Go 💪", "go")
-	btns.Inline(btns.Row(goButton))
+	return cfg
+}
+
+func Setup(db airtable.Airtable, b *bot.Bot) {
+	cfg := newConfig()
+
+	goBtns := &bot.ReplyMarkup{}
+	goButton := goBtns.Data("Go 💪", "go")
+	goBtns.Inline(goBtns.Row(goButton))
 
 	b.Handle("/start", func(c bot.Context) error {
 		return simplectx.Wrap(c, func(c bot.Context, sc *simplectx.Context) {
@@ -37,7 +44,7 @@ func Setup(db airtable.Airtable, b *bot.Bot) {
 			sc.Send(hello)
 			sc.Send(fmt.Sprintf(hiText, cfg.AnnounceLink), &bot.SendOptions{
 				DisableWebPagePreview: true,
-				ReplyMarkup:           btns,
+				ReplyMarkup:           goBtns,
 			})
 
 			var users []Request
@@ -126,63 +133,63 @@ func Setup(db airtable.Airtable, b *bot.Bot) {
 		})
 	})
 
-	b.Handle("/notify", func(c bot.Context) error {
-		return simplectx.Wrap(c, func(c bot.Context, sc *simplectx.Context) {
-			if c.Sender().ID != cfg.AdminID {
-				sc.Reply("permission denied")
+	// notification sending
+	if !cfg.SendNotification {
+		return
+	}
 
-				return
-			}
+	var requests []Request
+	ctx := context.Background()
+	e(db.List(ctx, &requests, airtable.View("NotSend")))
 
-			var requests []Request
-			filter := airtable.Filter(Request{
-				Send: false,
+	for _, r := range requests {
+		switch r.Status {
+		case None:
+			send(b, r, sad)
+			send(b, r, fmt.Sprintf(remind, 11), goBtns)
+
+		case Declined:
+			send(b, r, sorry)
+			send(b, r, decline)
+			send(b, r, r.DeclineMessage)
+
+		case Accepted:
+			link, err := b.CreateInviteLink(bot.ChatID(cfg.GroupChatID), &bot.ChatInviteLink{
+				Name:        r.Name + " link",
+				MemberLimit: 1,
 			})
-			ctx := context.Background()
-			sc.Error(db.List(ctx, &requests, filter))
+			e(err)
 
-			acceptedCount := 0
-			for _, r := range requests {
-				if r.Status == Accepted {
-					acceptedCount++
-				}
-			}
+			btns := &bot.ReplyMarkup{}
+			btn := btns.URL("👌 let's go", link.InviteLink)
+			btns.Inline(btns.Row(btn))
 
-			for _, r := range requests {
-				switch r.Status {
-				case None:
-					sc.SendTo(r, sad)
-					sc.SendTo(r, fmt.Sprintf(remind, acceptedCount), goButton)
+			send(b, r, welcome)
+			send(b, r, accept, btns)
+		}
 
-				case Declined:
-					sc.SendTo(r, sorry)
-					sc.SendTo(r, decline)
-					sc.SendTo(r, r.DeclineMessage)
+		e(db.Patch(ctx, Request{
+			RecordID: r.RecordID,
+			Send:     true,
+		}))
 
-				case Accepted:
-					link, err := c.Bot().CreateInviteLink(bot.ChatID(cfg.GroupChatID), &bot.ChatInviteLink{
-						Name:        r.Name + " link",
-						MemberLimit: 1,
-					})
-					sc.Error(err)
+		fmt.Println("done", r.UserID, r.Name)
 
-					btns := &bot.ReplyMarkup{}
-					btn := btns.URL("Согласен, let's go", link.InviteLink)
-					btns.Inline(btns.Row(btn))
+		time.Sleep(500 * time.Millisecond)
+	}
 
-					sc.SendTo(r, welcome)
-					sc.SendTo(r, accept, btns)
-				}
+	fmt.Println("all done")
+}
 
-				sc.Error(db.Patch(ctx, Request{
-					RecordID: r.RecordID,
-					Send:     true,
-				}))
+func send(b *bot.Bot, to bot.Recipient, what interface{}, opts ...interface{}) {
+	_, err := b.Send(to, what, opts...)
+	e(err)
+}
 
-				fmt.Println("done", r.UserID, r.Name)
+func e(err error) {
+	if err == nil {
+		return
+	}
 
-				time.Sleep(500 * time.Millisecond)
-			}
-		})
-	})
+	log.Fatal(err)
 }

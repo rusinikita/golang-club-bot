@@ -31,6 +31,10 @@ func tableName(entity any) string {
 const RecordIDField = "RecordID"
 
 func fields(entity any) map[string]any {
+	return fieldsInternal(entity, false)
+}
+
+func fieldsInternal(entity any, nonZero bool) map[string]any {
 	v := reflect.ValueOf(entity)
 
 	if v.Kind() == reflect.Ptr {
@@ -53,31 +57,22 @@ func fields(entity any) map[string]any {
 		}
 
 		omitempty := strings.Contains(fType.Tag.Get("json"), "omitempty")
-		if omitempty && fValue.IsZero() {
+		if (omitempty || nonZero) && fValue.IsZero() {
 			continue
 		}
 
-		m[fName] = fValue.Interface()
-
-		if fType.Type.Kind() == reflect.Ptr {
-			fType.Type = fType.Type.Elem()
+		if fValue.Kind() == reflect.Ptr {
 			fValue = fValue.Elem()
 		}
+
+		m[fName] = fValue.Interface()
 	}
 
 	return m
 }
 
 func nonZeroFields(entity any) map[string]any {
-	f := fields(entity)
-
-	for k, v := range f {
-		if reflect.ValueOf(v).IsZero() {
-			delete(f, k)
-		}
-	}
-
-	return f
+	return fieldsInternal(entity, true)
 }
 
 func id(entity any) string {

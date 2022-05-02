@@ -13,9 +13,9 @@ type Request struct {
 	Name           string
 	Username       string
 	RepositoryLink string `json:",omitempty"`
-	Status         Status
-	DeclineMessage string
-	Send           bool // is notification send
+	Status         Status `json:",omitempty"`
+	DeclineMessage string `json:",omitempty"`
+	Send           bool   `json:",omitempty"` // is notification send
 }
 
 func (r Request) Recipient() string {
