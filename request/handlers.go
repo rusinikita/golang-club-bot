@@ -78,6 +78,10 @@ func Setup(db airtable.Airtable, b *bot.Bot) {
 
 	b.Handle(bot.OnText, func(c bot.Context) error {
 		return simplectx.Wrap(c, func(c bot.Context, sc *simplectx.Context) {
+			if c.Chat().ID == cfg.GroupChatID {
+				return
+			}
+
 			link := ""
 			for _, entity := range c.Message().Entities {
 				if entity.Type != bot.EntityURL && entity.Type != bot.EntityTextLink {
